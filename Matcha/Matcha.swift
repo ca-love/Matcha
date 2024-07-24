@@ -67,38 +67,59 @@ public struct Matcha: Equatable {
     /// Matcha(url: url, pattern: "/{A}/{B}/{C}/")?.value(at: 1)        // is `to`
     /// Matcha(url: url, pattern: "/{A}/{B}/{C}/")?.value(of: "C")      // is `glory`
     public init?(url: URL, pattern: String) {
-        let isPath = pattern.first == "/"
-        let patternUrl = isPath ? "dummy\(pattern)" : pattern
+        guard let url = url.trailingSlashed else { return nil }
+        let isPatternPath = pattern.first == "/"
 
-        guard let schemeRegex = try? NSRegularExpression(pattern: "[^https?:\\/\\/].+") else { return nil }
-        guard let matched = schemeRegex.firstMatch(in: patternUrl) else { return nil }
+        guard let patternComponents = URLComponents(string: pattern) else { return nil }
 
-        let paths = (patternUrl as NSString).substring(with: matched.range(at: 0)).split(separator: "/").map(String.init)
-
-        guard (url.host == paths.first || isPath)
-            && (url.pathComponents.count == paths.count || (url.pathComponents.isEmpty && paths.count == 1)) else {
-                return nil
+        guard url.host == patternComponents.host || isPatternPath else {
+            return nil
         }
+
+        let pathComponents = patternComponents.url?.pathComponents.dropFirst() ?? []
+
+        var regexComponents: [String] = []
+        var parameterNames: [String] = []
+        for pathComponent in pathComponents {
+            if pathComponent.first == "{" && pathComponent.last == "}" {
+                let parameterName = String(pathComponent.dropFirst().dropLast())
+                regexComponents.append("(?<\(parameterName)>.+)")
+                parameterNames.append(parameterName)
+            }
+            else {
+                regexComponents.append(pathComponent)
+            }
+        }
+
+        let regexPattern = regexComponents.joined(separator: "/")
+        let urlPath = url.path
+
+        guard let regex = try? NSRegularExpression(pattern: "/\(regexPattern)$"),
+              let match = regex.firstMatch(in: urlPath) else { return nil }
 
         var values: [String: String] = [:]
         var list: [String] = []
-
-        for (pattern, path) in zip(paths, url.pathComponents) {
-            if pattern == path || path == "/" {
-                continue
-            }
-
-            if pattern.first == "{" && pattern.last == "}" {
-                values[String(pattern.dropFirst().dropLast())] = path
-                list.append(path)
-            }
-            else {
-                return nil
-            }
+        for parameterName in parameterNames {
+            guard let range = match.range(withName: parameterName, in: urlPath) else { continue }
+            let value = String(urlPath[range])
+            values[parameterName] = value
+            list.append(value)
         }
 
         self.url = url
         self.values = values
         self.list = list
+    }
+}
+
+private extension NSTextCheckingResult {
+    func range(withName name: String, in string: String) -> Range<String.Index>? {
+        Range(range(withName: name), in: string)
+    }
+}
+
+private extension URL {
+    var trailingSlashed: URL? {
+        absoluteString.hasSuffix("/") ? self : URL(string: absoluteString + "/")
     }
 }

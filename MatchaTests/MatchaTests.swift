@@ -32,13 +32,17 @@ class MatchaTests: XCTestCase {
         XCTAssertNil(matcha.matched(""))
         XCTAssertNil(Matcha(url: URL(string: "https://example.com/")!).matched("/path"))
         XCTAssertNil(Matcha(url: URL(string: "https://example.com/")!).matched(""))
-
         XCTAssertNotNil(matcha.matched("https://example.com/path/to/glory/"))
         XCTAssertNotNil(matcha.matched("https://example.com/path/to/glory"))
         XCTAssertNotNil(matcha.matched("/path/to/glory/"))
         XCTAssertNotNil(matcha.matched("/path/to/glory"))
         XCTAssertNotNil(Matcha(url: URL(string: "https://example.com/")!).matched("/"))
         XCTAssertNotNil(Matcha(url: URL(string: "https://example.com")!).matched("/"))
+        XCTAssertNotNil(matcha.matched("/path/{A}"))
+        XCTAssertEqual(matcha.matched("/path/{A}")?.value(of: "A"), "to/glory")
+        XCTAssertEqual(matcha.matched("/{A}")?.value(of: "A"), "path/to/glory")
+        XCTAssertEqual(matcha.matched("/{A}/{B}")?.value(of: "A"), "path/to")
+        XCTAssertEqual(matcha.matched("/{A}/{B}")?.value(of: "B"), "glory")
 
         let urlPattern = "https://example.com/{A}/{B}/{C}/"
         let urlPatternMatched = matcha.matched(urlPattern)
